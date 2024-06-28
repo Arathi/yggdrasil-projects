@@ -1,6 +1,5 @@
 import Router from "@koa/router";
 import { AppContext, AppState } from "@/app";
-import { convertToMessage } from "@/domains/user";
 import {
   AuthenticateRequest,
   AuthenticateResponse,
@@ -8,14 +7,17 @@ import {
 import ErrorResponse from "@/domains/yggdrasil/error";
 import Profile from "@/domains/yggdrasil/profile";
 import { RefreshRequest, RefreshResponse } from "@/domains/yggdrasil/refresh";
+import { getLogger } from "@/utils/logger";
+
+const logger = getLogger("yggdrasil-router");
 
 const router = new Router<AppState, AppContext>();
 
-router.post("/authenticate", async (ctx) => {
+router.post("/authserver/authenticate", async (ctx) => {
   const { userSvc, tokenSvc, profileSvc } = ctx;
   const reqBody = ctx.request.body as AuthenticateRequest;
 
-  const user = await userSvc.findByUserName(reqBody.username);
+  const user = await userSvc.findByEmail(reqBody.username);
   if (user === null) {
     // 用户名不存在或者密码错误
     ctx.status = 403;
@@ -26,26 +28,38 @@ router.post("/authenticate", async (ctx) => {
     return;
   }
 
-  const clientToken =
-    reqBody.clientToken ?? (await tokenSvc.generateClientToken());
-  const accessToken = await tokenSvc.generateAccessToken();
-  const profiles = await profileSvc.findByUserId(user.id);
+  let profileIndex = user.profiles.findIndex((p) => p.id === user.profileId);
+  if (profileIndex < 0) profileIndex = 0;
+  const spr = user.profiles[profileIndex];
 
-  const availableProfiles: Profile[] = profiles.map((profile) => ({
-    name: profile.name,
-    id: profile.id,
+  const { clientToken = await tokenSvc.generateClientToken() } = reqBody;
+  // const profiles = await profileSvc.findByUserId(user.id);
+
+  const availableProfiles: Profile[] = user.profiles.map((pf) => ({
+    name: pf.name,
+    id: pf.id,
   }));
-  const profile = availableProfiles.find(
-    (pf) => pf.id === user.selectedProfileId
-  );
-  if (profile === undefined) {
+  if (availableProfiles.length === 0) {
+    logger.info(`用户${user.id}的档案数量为0`);
     ctx.status = 403;
     ctx.body = {
       error: "ForbiddenOperationException",
-      errorMessage: "未找到已选取的Profile",
+      errorMessage: "未找到档案",
     } as ErrorResponse;
     return;
   }
+
+  let profile: Profile | undefined = undefined;
+  if (user.profileId !== null) {
+    profile = availableProfiles.find((pf) => pf.id === user.profileId);
+  }
+  if (profile === undefined) {
+    logger.warn(`未找到用户${user.id}的档案${user.profileId}`);
+    profile = availableProfiles[0];
+    userSvc.updateProfileIdById(user.id, profile.id);
+  }
+
+  const accessToken = await tokenSvc.generateAccessToken(user.id, profile.id);
 
   const respBody: AuthenticateResponse = {
     clientToken,
@@ -55,13 +69,17 @@ router.post("/authenticate", async (ctx) => {
   };
 
   if (reqBody.requestUser === true) {
-    respBody.user = convertToMessage(user);
+    respBody.user = {
+      username: user.email,
+      properties: userSvc.getProperties(user),
+      id: user.id,
+    };
   }
 
   ctx.body = respBody;
 });
 
-router.post("/refresh", async (ctx) => {
+router.post("/authserver/refresh", async (ctx) => {
   const { userSvc, tokenSvc } = ctx;
 
   const reqBody = ctx.request.body as RefreshRequest;
@@ -87,7 +105,10 @@ router.post("/refresh", async (ctx) => {
     return;
   }
 
-  const accessToken = await tokenSvc.generateAccessToken();
+  const accessToken = await tokenSvc.generateAccessToken(
+    payload.userId,
+    payload.profileId
+  );
   const { clientToken, selectedProfile, requestUser = false } = reqBody;
 
   const respBody: RefreshResponse = {
@@ -96,20 +117,24 @@ router.post("/refresh", async (ctx) => {
     selectedProfile,
   };
   if (requestUser) {
-    respBody.user = convertToMessage(user);
+    respBody.user = {
+      username: user.email,
+      properties: userSvc.getProperties(user),
+      id: user.id,
+    };
   }
   ctx.body = respBody;
 });
 
-router.get("/validate", (ctx) => {
+router.get("/authserver/validate", (ctx) => {
   //
 });
 
-router.get("/signout", (ctx) => {
+router.get("/authserver/signout", (ctx) => {
   //
 });
 
-router.get("/invalidate", (ctx) => {
+router.get("/authserver/invalidate", (ctx) => {
   //
 });
 

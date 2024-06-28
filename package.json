@@ -1,0 +1,12 @@
+{
+  "name": "@amcs/yggdrasil-projects",
+  "version": "0.1.0",
+  "description": "",
+  "keywords": [
+    "minecraft",
+    "authlib",
+    "yggdrasil"
+  ],
+  "author": "Arathi of Nebnizilla",
+  "license": "MIT"
+}

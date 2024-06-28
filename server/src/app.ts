@@ -1,14 +1,21 @@
 import Koa from "koa";
+import bodyParser from "koa-bodyparser";
+import { PrismaClient } from "@prisma/client";
+
+import User from "./domains/user";
+import Profile from "./domains/profile";
+
 import UserService from "./services/user-service";
 import ProfileService from "./services/profile-service";
-import TokenService from "./services/token-service";
+import TokenService, { AccessToken } from "./services/token-service";
 
 import yggdrasil from "./routes/yggdrasil";
 import extension from "./routes/extension";
-import koaBody from "koa-body";
 
 export interface AppState {
-  //
+  accessToken?: AccessToken;
+  user?: User;
+  profile?: Profile;
 }
 
 export interface AppContext {
@@ -17,16 +24,16 @@ export interface AppContext {
   tokenSvc: TokenService;
 }
 
-export function createApp() {
+export function createApp(prisma: PrismaClient) {
   const app = new Koa<AppState, AppContext>();
 
   // context
-  app.context.userSvc = new UserService();
-  app.context.profileSvc = new ProfileService();
+  app.context.userSvc = new UserService(prisma);
+  app.context.profileSvc = new ProfileService(prisma);
   app.context.tokenSvc = new TokenService();
 
   // middleware
-  app.use(koaBody());
+  app.use(bodyParser());
 
   // routes
   app.use(yggdrasil.routes()).use(yggdrasil.allowedMethods());

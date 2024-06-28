@@ -2,8 +2,10 @@ import Profile from "../yggdrasil/profile";
 import User from "../yggdrasil/user";
 
 export interface RegisterRequest {
-  username: string;
+  email: string;
+  name: string;
   password: string;
+  language?: string;
 }
 
 export interface RegisterResponse {

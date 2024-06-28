@@ -1,22 +1,31 @@
+import Router from "@koa/router";
 import { AppContext, AppState } from "@/app";
 import {
   RegisterRequest,
   RegisterResponse,
 } from "@/domains/extension/register";
-import { convertToMessage } from "@/domains/user";
-import Router from "@koa/router";
+import { getLogger } from "@/utils/logger";
+
+const logger = getLogger("extension-router");
 
 const router = new Router<AppState, AppContext>();
 
 router.post("/register", async (ctx) => {
-  const { userSvc, profileSvc } = ctx;
+  const { userSvc } = ctx;
 
   const reqBody = ctx.request.body as RegisterRequest;
-  const user = await userSvc.generate(reqBody.username, reqBody.password);
-  const profile = await profileSvc.generate(reqBody.username, user.id);
+  const { email, name, password, language } = reqBody;
+
+  const user = await userSvc.create(email, name, password, language);
+  const profile = user.profiles[0];
+  userSvc.updateProfileId(profile);
 
   const respBody: RegisterResponse = {
-    user: convertToMessage(user),
+    user: {
+      username: user.email,
+      properties: userSvc.getProperties(user),
+      id: user.id,
+    },
     profile: {
       name: profile.name,
       id: profile.id,

@@ -1,17 +1,35 @@
-import { v4 as nextUUID } from "uuid";
-import Profile from "@/domains/profile";
+import { PrismaClient } from "@prisma/client";
 
 export default class ProfileService {
-  async generate(name: string, userId: string): Promise<Profile> {
-    return {
-      id: nextUUID(),
-      userId,
-      name,
-    };
+  prisma: PrismaClient;
+
+  constructor(prisma: PrismaClient) {
+    this.prisma = prisma;
   }
 
-  async save(profile: Profile) {}
-  async findByUserId(userId: string): Promise<Array<Profile>> {
-    return [];
+  async generate(userId: string, name: string) {
+    const profile = await this.prisma.profile.create({
+      data: {
+        userId,
+        name,
+      },
+    });
+    return profile;
+  }
+
+  async findById(id: string) {
+    return await this.prisma.profile.findUnique({
+      where: {
+        id,
+      },
+    });
+  }
+
+  async findByUserId(userId: string) {
+    return this.prisma.profile.findMany({
+      where: {
+        userId,
+      },
+    });
   }
 }
